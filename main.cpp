@@ -13,28 +13,39 @@
 #include <sstream>
 #include <fstream>
 
-// Truncation from double to float, who cares...
+//*** Truncation from double to float warning
 #pragma warning(disable:4305)
 #pragma warning(disable:4244)
 
 //====================================================================
 
-// Work regimes: Uncomment one and only one of these...
+//*** Work regimes: Uncomment exactly one!
 #define REGIME_SDSS
 // #define REGIME_FRB
+// #define REGIME_TNG
 // #define REGIME_BOLSHOI_PLANCK
 // #define REGIME_ROCKSTAR
 // #define REGIME_POISSON
 // #define REGIME_CONNECTOME
 // #define REGIME_EMBEDDING
 
+//*** Enable velocity analysis, which will change the trace volume from <half> to <half4>
+//*** with the extra 3 channels storing the equilibrium mean unsigned orientation of the agents
 // #define VELOCITY_ANALYSIS
+
+#define HALO_COLOR_ANALYSIS
+
+//*** How to initialize the agents in their 3D domain: Uncomment exactly one!
+#define AGENTS_INIT_AROUND_DATA
+// #define AGENTS_INIT_RANDOMLY
+
+//====================================================================
 
 #ifdef REGIME_SDSS
 #define DATASET_NAME "data/SDSS/galaxiesInSdssSlice_viz_bigger_lumdist_t=0.0"
 //#define DATASET_NAME "data/SDSS/galaxiesInSdssSlice_viz_huge_t=10.3"
 // #define DATASET_NAME "data/SDSS/sdssGalaxy_rsdCorr_dbscan_e2p0ms3_dz0p001_m10p0_t=10.3"
-#define COLOR_PALETTE_TRACE "data/palette_gogh_green.tga"
+#define COLOR_PALETTE_TRACE "data/palette_sunset3.tga"
 #define COLOR_PALETTE_DATA "data/palette_hot.tga"
 const float SENSE_SPREAD = 20.0;
 const float SENSE_DISTANCE = 2.55;
@@ -50,6 +61,7 @@ const float SAMPLING_EXPONENT = 3.5;
 #define DATASET_NAME "data/BP/bpdat_boxDist_trimDist_trimMass_t=0.05_subrate=1_ROTATED"
 // #define COLOR_PALETTE_TRACE "data/palette_sunset2.tga"
 #define COLOR_PALETTE_TRACE "data/palette_gogh_green.tga"
+#define COLOR_PALETTE_DATA "data/palette_hot.tga"
 const float SENSE_SPREAD = 20.0;
 const float SENSE_DISTANCE = 2.5;
 const float MOVE_ANGLE = 10.0;
@@ -59,21 +71,43 @@ const float PERSISTENCE = 0.885;
 const float SAMPLING_EXPONENT = 3.0;
 #endif
 
+#ifdef REGIME_TNG
+#define DATASET_NAME "data/TNG/tng100-1_allSubHalos_spinEtc_t=0.0"
+#define COLOR_PALETTE_TRACE "data/palette_sunset3.tga"
+#define COLOR_PALETTE_DATA "data/palette_hot.tga"
+const float SENSE_SPREAD = 20.0;
+const float SENSE_DISTANCE = 2.55;
+const float MOVE_ANGLE = 10.0;
+const float MOVE_DISTANCE = 0.1;
+const float AGENT_DEPOSIT = 0.0;
+const float PERSISTENCE = 0.91;
+const float SAMPLING_EXPONENT = 3.8;
+#endif
+
 #ifdef REGIME_FRB
 #define DATASET_NAME "data/FRB/frb_field_cigaleMass_t=0.0_z=0.01-0.1"
 #define COLOR_PALETTE_TRACE "data/palette_sunset3.tga"
+#define COLOR_PALETTE_DATA "data/palette_hot.tga"
+const float SENSE_SPREAD = 20.0;
+const float SENSE_DISTANCE = 5.0;
+const float MOVE_ANGLE = 10.0;
+const float MOVE_DISTANCE = 0.2;
+const float AGENT_DEPOSIT = 0.0;
+const float PERSISTENCE = 0.93;
+const float SAMPLING_EXPONENT = 3.6;
 #endif
 
 #ifdef REGIME_ROCKSTAR
 #define DATASET_NAME "data/MassiveNuS/rockstar_mnv0.10000_om0.30000_As2.1000_out_66t=0.0roi=256.0"
 #define COLOR_PALETTE_TRACE "data/palette_magma.tga"
+#define COLOR_PALETTE_DATA "data/palette_hot.tga"
 #endif
 
 #ifdef REGIME_POISSON
-#define DATASET_NAME "data/Conduits/poisson_256_2d_conduits_n_levels=100_ratio=1.05"
+// #define DATASET_NAME "data/Conduits/poisson_256_2d_conduits_n_levels=100_ratio=1.05"
 // #define DATASET_NAME "data/Poisson/regular_4096_3d"
 // #define DATASET_NAME "data/Poisson/random_4096_3d"
-// #define DATASET_NAME "data/Poisson/poisson_4096_2d_3d"
+#define DATASET_NAME "data/Poisson/poisson_4096_2d_3d"
 // #define DATASET_NAME "data/Poisson/poisson_256_2d_3d_flattened"
 #define COLOR_PALETTE_TRACE "data/palette_hot.tga"
 #define COLOR_PALETTE_DATA "data/palette_hot.tga"
@@ -89,6 +123,7 @@ const float SAMPLING_EXPONENT = 4.5;
 #ifdef REGIME_CONNECTOME
 #define DATASET_NAME "data/Connectome/connectome0_XYZW"
 #define COLOR_PALETTE_TRACE "data/palette_magneto2.tga"
+#define COLOR_PALETTE_DATA "data/palette_hot.tga"
 #endif
 
 #ifdef REGIME_EMBEDDING
@@ -167,7 +202,7 @@ struct SimulationConfig {
 
     int n_data_points;
     int n_agents;
-    int filler2;
+    int n_iteration;
     int filler3;
 };
 
@@ -230,8 +265,27 @@ struct RenderingConfig {
 
     float sigma1_a_g;
     float sigma1_a_b;
+    float slime_ior;
+    float aperture;
+
+    float focus_dist;
+    float light_pos;
+    float sphere_pos;
+    int shininess;
+
+    float some_slider;
+    float sigma_t_rgb;
+    float albedo_r;
+    float albedo_g;
+    
+    float albedo_b;
     int tmp1;
     int tmp2;
+    int tmp3;
+
+    // add new variables before albedos. Some bug.
+    // order matters
+    // render terminates if not multiple of 4, or not every parameter specified
 
 };
 
@@ -436,12 +490,26 @@ int main(int argc, char **argv)
     assert(graphics::is_ready(&compute_shader));
     printf("cs_agents_propagate shader compiled...\n");
 
+    // Particle sorting shader
+    File sort_shader_file = file_system::read_file("cs_agents_sort.hlsl");
+    ComputeShader sort_shader = graphics::get_compute_shader_from_code((char *)sort_shader_file.data, sort_shader_file.size);
+    file_system::release_file(sort_shader_file);
+    assert(graphics::is_ready(&sort_shader));
+    printf("cs_agents_sort shader compiled...\n");
+
     // Decay/diffusion shader
     File decay_compute_shader_file = file_system::read_file("cs_field_decay.hlsl");
     ComputeShader decay_compute_shader = graphics::get_compute_shader_from_code((char *)decay_compute_shader_file.data, decay_compute_shader_file.size);
     file_system::release_file(decay_compute_shader_file);
     assert(graphics::is_ready(&decay_compute_shader));
     printf("cs_field_decay shader compiled...\n");
+
+    // Trail Diffuse shader
+    File decay_trail_shader_file = file_system::read_file("cs_field_decay_trail.hlsl");
+    ComputeShader decay_trail_shader = graphics::get_compute_shader_from_code((char *)decay_trail_shader_file.data, decay_trail_shader_file.size);
+    file_system::release_file(decay_trail_shader_file);
+    assert(graphics::is_ready(&decay_trail_shader));
+    printf("cs_field_trail shader compiled...\n");
 
     // Vertex shader for displaying textures.
     vertex_shader_file = file_system::read_file("vs_2d.hlsl"); 
@@ -478,12 +546,15 @@ int main(int argc, char **argv)
     printf("ps_volpath shader compiled...\n");
 
     // Textures for the simulation
-    Texture3D trail_tex_A = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16_FLOAT, 2);
-    Texture3D trail_tex_B = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16_FLOAT, 2);
+    // Texture3D trail_tex_A = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16_FLOAT, 2);
+    // Texture3D trail_tex_B = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16_FLOAT, 2);
+    Texture3D trail_tex_A = graphics::load_texture3D("export_1/deposit.dds");
+    Texture3D trail_tex_B = graphics::load_texture3D("export_1/deposit.dds");
     #ifdef VELOCITY_ANALYSIS
     Texture3D trace_tex = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16G16B16A16_FLOAT, 8);
     #else
-    Texture3D trace_tex = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16_FLOAT, 2);
+    Texture3D trace_tex = graphics::load_texture3D("export_1/trace.dds");
+    // Texture3D trace_tex = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16_FLOAT, 2);
     #endif
     Texture2D display_tex = graphics::get_texture2D(NULL, window_width, window_height, DXGI_FORMAT_R32G32B32A32_FLOAT, 16);
     Texture2D display_tex_uint = graphics::get_texture2D(NULL, window_width, window_height, DXGI_FORMAT_R32_UINT, 4);
@@ -494,6 +565,10 @@ int main(int argc, char **argv)
     TextureSampler tex_sampler_deposit = graphics::get_texture_sampler(CLAMP, D3D11_FILTER_ANISOTROPIC);
     TextureSampler tex_sampler_display = graphics::get_texture_sampler();
     TextureSampler tex_sampler_color_palette = graphics::get_texture_sampler();
+
+    // HDRI Image for Vol Path Rendering
+    Texture2D nature_hdri_tex = graphics::load_texture2D("textures/autumn_ground_8k.tga");
+    TextureSampler tex_sampler_nature_hdri = graphics::get_texture_sampler();
     
 	graphics::set_blend_state(BlendType::ALPHA);
 
@@ -516,7 +591,8 @@ int main(int argc, char **argv)
     {
         for (int i = 0; i < count; ++i) {
 
-            if (i < data_count) { // These are the data points
+            // These are the data points, read from input
+            if (i < data_count) {
                 int start_index = int(4*i);
 
                 float x = input_data[start_index];
@@ -533,19 +609,29 @@ int main(int argc, char **argv)
                 else
                     pw[i] = weight;
 
-                pt[i] = -5; // Marker value for input data
+                pt[i] = -5.0; // Marker value for input data
                 pp[i] = 0.0;
             }
 
-            else { // These are free physarum agents
+            // These are free-flowing physarum agents
+            else {
+                #ifdef AGENTS_INIT_AROUND_DATA // Initialize the agents around data points to speed up convergence
                 int random_data_index = (int)random::uniform(0.0, (float)(data_count-1));
-                const float random_spread = 0.05;
-                // Initialize the agents around data points to speed up convergence
-                px[i] = px[random_data_index] + random::uniform(-random_spread * (float)gx, random_spread * (float)gx);
-                py[i] = py[random_data_index] + random::uniform(-random_spread * (float)gy, random_spread * (float)gy);
-                pz[i] = pz[random_data_index] + random::uniform(-random_spread * (float)gz, random_spread * (float)gz);
-                pt[i] = random::uniform(0.0, math::PI2);
-                pp[i] = math::acos(2.0 * random::uniform(0.0, 1.0) - 1.0);
+                const float random_spread = 0.025;
+                float radius = random_spread * math::min(math::min(gx, gy), gz) * random::uniform();
+                float xi1 = random::uniform();
+                float xi2 = random::uniform();
+                px[i] = px[random_data_index] + radius * math::cos(math::PI2 * xi1) * math::sqrt(xi2 * (1.0-xi2));
+                py[i] = py[random_data_index] + radius * math::sin(math::PI2 * xi1) * math::sqrt(xi2 * (1.0-xi2));
+                pz[i] = pz[random_data_index] + 0.5 * radius * (1.0 - 2.0*xi2);
+                #endif
+                #ifdef AGENTS_INIT_RANDOMLY
+                px[i] = random::uniform(0.0, (float)gx);
+                py[i] = random::uniform(0.0, (float)gy);
+                pz[i] = random::uniform(0.0, (float)gz);
+                #endif
+                pp[i] = random::uniform(0.0, math::PI2);
+                pt[i] = math::acos(2.0 * random::uniform(0.0, 1.0) - 1.0);
                 pw[i] = 1.0;
             }
 
@@ -648,7 +734,7 @@ int main(int argc, char **argv)
     rendering_config.world_depth = (float)GRID_RESOLUTION_Z;
     rendering_config.screen_width = (float)window_width;
     rendering_config.screen_height = (float)window_height;
-    rendering_config.sample_weight = 0.025;
+    rendering_config.sample_weight = 0.01;
     rendering_config.optical_thickness = 0.25;
     rendering_config.highlight_density = 10.0;
     rendering_config.galaxy_weight = 0.25;
@@ -661,23 +747,46 @@ int main(int argc, char **argv)
     rendering_config.pt_iteration = 0;
     rendering_config.sigma_s = 0.0;
     rendering_config.sigma_a = 0.5;
-    rendering_config.sigma_e = 10.0;
+    rendering_config.sigma_e = 4.0;
     rendering_config.trace_max = 100.0;
     rendering_config.camera_offset_x = 0.0;
     rendering_config.camera_offset_y = 0.0;
     rendering_config.exposure = 1.0;
-    rendering_config.n_bounces = 20;
+    rendering_config.n_bounces = 15;    // 30
     rendering_config.ambient_trace = 0.0;
-    rendering_config.compressive_accumulation = 1;
+    rendering_config.compressive_accumulation = 0;
     rendering_config.guiding_strength = 0.1;
-    rendering_config.scattering_anisotropy = 0.9;
+    rendering_config.scattering_anisotropy = 0.5;
 
-    rendering_config.sigma1_s_r = 0.3;
-    rendering_config.sigma1_s_g = 0.3;
-    rendering_config.sigma1_s_b = 0.1;
-    rendering_config.sigma1_a_r = 0.1;
-    rendering_config.sigma1_a_g = 0.1;
-    rendering_config.sigma1_a_b = 0.5;
+    rendering_config.slime_ior = 1.45;
+    rendering_config.light_pos = 0;
+    rendering_config.sphere_pos = 0;
+    rendering_config.shininess = 64;
+
+    rendering_config.aperture = 0;  // default 0.8
+    rendering_config.focus_dist = 0.7;
+
+    // Compute sigma_a and sigma_s for each of RGB
+    rendering_config.sigma_t_rgb = 0.6;
+    rendering_config.albedo_r = 0.85;   // 0.92
+    rendering_config.albedo_g = 0.75;   // 0.88
+    rendering_config.albedo_b = 0.24;   // 0.05
+    rendering_config.some_slider = 0;
+
+    rendering_config.sigma1_a_r = (1 - rendering_config.albedo_r) * rendering_config.sigma_t_rgb;
+    rendering_config.sigma1_a_g = (1 - rendering_config.albedo_g) * rendering_config.sigma_t_rgb;
+    rendering_config.sigma1_a_b = (1 - rendering_config.albedo_b) * rendering_config.sigma_t_rgb;
+
+    rendering_config.sigma1_s_r = rendering_config.albedo_r * rendering_config.sigma_t_rgb;
+    rendering_config.sigma1_s_g = rendering_config.albedo_g * rendering_config.sigma_t_rgb;
+    rendering_config.sigma1_s_b = rendering_config.albedo_b * rendering_config.sigma_t_rgb;
+
+    // printf("%f\n",rendering_config.sigma1_a_r);
+    // printf("%f\n",rendering_config.sigma1_a_g);
+    // printf("%f\n",rendering_config.sigma1_a_b);
+    // printf("%f\n",rendering_config.sigma1_s_r);
+    // printf("%f\n",rendering_config.sigma1_s_g);
+    // printf("%f\n",rendering_config.sigma1_s_b);
 
     ConstantBuffer rendering_settings_buffer = graphics::get_constant_buffer(sizeof(RenderingConfig));
     graphics::update_constant_buffer(&rendering_settings_buffer, &rendering_config);
@@ -699,6 +808,7 @@ int main(int argc, char **argv)
     simulation_config.normalization_factor = 1.0;
     simulation_config.n_data_points = data_count;
     simulation_config.n_agents = NUM_AGENTS;
+    simulation_config.n_iteration = 0;
     ConstantBuffer config_buffer = graphics::get_constant_buffer(sizeof(SimulationConfig));
 
     // Assign default misc parameters
@@ -727,7 +837,7 @@ int main(int argc, char **argv)
     bool is_running = true;
     bool is_a = true;
     bool show_ui = true;
-    bool run_mold = true;
+    bool run_mold = false;
     bool turning_camera = false;
     bool render_dof = true;
     bool store_deposit = false;
@@ -737,8 +847,23 @@ int main(int argc, char **argv)
     bool compute_histogram = true;
     bool run_pt = true;
     bool reset_pt = false;
+    bool sort_agents = false;
     float background_color = 0.0;
     VisualizationMode vis_mode = VisualizationMode::VM_PARTICLES;
+
+    bool smooth_trail = true;
+
+    // Update simulation config
+    graphics::update_constant_buffer(&config_buffer, &simulation_config);
+    graphics::set_constant_buffer(&config_buffer, 0);
+
+    // Decay only trail
+    if (smooth_trail) {
+        graphics::set_compute_shader(&decay_trail_shader);
+        graphics::set_texture_compute(&trace_tex, 0);
+        graphics::run_compute(GRID_RESOLUTION_X / 8, GRID_RESOLUTION_Y / 8, GRID_RESOLUTION_Z / 8);
+        graphics::unset_texture_compute(0);
+    }
 
     while(is_running)
     {
@@ -747,6 +872,7 @@ int main(int argc, char **argv)
         std::ostringstream window_title;
         window_title.precision(3);
         window_title << "Polyphorm [ " << 1000.0 * sec_per_frame_amortized << " ms/frame";
+        window_title << " | pass " << simulation_config.n_iteration;
         if (vis_mode == VisualizationMode::VM_PATH_TRACING)
             window_title << " | " << rendering_config.pt_iteration << " spp";
         window_title << " ]";
@@ -818,6 +944,7 @@ int main(int argc, char **argv)
                 graphics_context->context->ClearUnorderedAccessViewFloat(trail_tex_B.ua_view, clear_tex);
                 graphics_context->context->ClearUnorderedAccessViewFloat(trace_tex.ua_view, clear_tex);
                 reset_eplot();
+                simulation_config.n_iteration = 0;
             }
             if (input::key_pressed(KeyCode::F3)) run_mold = !run_mold;
             if (input::key_pressed(KeyCode::F4)) turning_camera = !turning_camera;
@@ -895,6 +1022,25 @@ int main(int argc, char **argv)
             graphics::run_compute(10, 10, grid_z);
             graphics::unset_texture_compute(0);
             graphics::unset_texture_compute(1);
+        }
+
+        // Partial agent sorting
+        if (run_mold && sort_agents)
+        {
+            graphics::set_compute_shader(&sort_shader);
+            graphics::set_structured_buffer(&particles_buffer_x, 2);
+            graphics::set_structured_buffer(&particles_buffer_y, 3);
+            graphics::set_structured_buffer(&particles_buffer_z, 4);
+            graphics::set_structured_buffer(&particles_buffer_phi, 5);
+            graphics::set_structured_buffer(&particles_buffer_theta, 6);
+            graphics::set_structured_buffer(&particles_buffer_weights, 7);
+            int32_t grid_z = (NUM_PARTICLES / 100) / THREAD_GROUP_SIZE;
+            // different attempts at addressing
+            for (int i = 0; i < 256; ++i) {
+                graphics::run_compute(10, 10, grid_z / 256);
+                ++simulation_config.n_iteration;
+                graphics::update_constant_buffer(&config_buffer, &simulation_config);
+            }
         }
 
         // Decay/diffusion
@@ -1123,6 +1269,10 @@ int main(int argc, char **argv)
                     rendering_config.pt_iteration = 0;
                 }
                 graphics::update_constant_buffer(&rendering_settings_buffer, &rendering_config);
+                // Nature HDRI Texture
+                graphics::set_texture_sampled_compute(&nature_hdri_tex, 5);
+                graphics::set_texture_sampler_compute(&tex_sampler_nature_hdri, 5);
+                
                 if (run_pt && rendering_config.pt_iteration < 1e5) {
                     graphics::set_compute_shader(&cs_volpath);
                     graphics::set_texture_compute(&display_tex, 0);
@@ -1138,6 +1288,8 @@ int main(int argc, char **argv)
                     graphics::set_texture_sampler_compute(&tex_sampler_color_palette, 3);
                     graphics::set_texture_sampled_compute(&palette_data_tex, 4);
                     graphics::set_texture_sampler_compute(&tex_sampler_color_palette, 4);
+
+
                     graphics::run_compute(
                         rendering_config.screen_width / int(PT_GROUP_SIZE_X),
                         rendering_config.screen_height / int(PT_GROUP_SIZE_Y),
@@ -1155,6 +1307,7 @@ int main(int argc, char **argv)
                 graphics::set_texture_sampler(&tex_sampler_display, 0);
                 graphics::draw_mesh(&quad_mesh);
                 graphics::unset_texture(0);
+                graphics::unset_texture(5);
             }
         }
 
@@ -1319,7 +1472,7 @@ int main(int argc, char **argv)
             graphics::set_render_targets_viewport(&render_target_window);
 
             Panel panel = ui::start_panel("", Vector2(0.0, 0.0), 1.0);
-            const float smoothing_coef = 0.9;
+            const float smoothing_coef = 0.1;
 
             float ss = math::rad2deg(simulation_config.sense_spread);
             reset_pt |= ui::add_slider(&panel, "SENSE ANGLE [DEG]", &ss, 0.0, 90.0);
@@ -1343,6 +1496,7 @@ int main(int argc, char **argv)
             rendering_config.sample_weight = math::pow(10.0, swgt);
             reset_pt |= ui::add_slider(&panel, "DEPOSIT WEIGHT", &rendering_config.galaxy_weight, 0.0, 1.0);
 
+            // ui::add_toggle(&panel, "AGENT SORTING", &sort_agents);
             ui::add_toggle(&panel, "TRACE HISTOGRAM", &compute_histogram);
             static bool random_histogram_sampling = false;
             ui::add_toggle(&panel, "HIST RNG SAMPLING", &random_histogram_sampling);
@@ -1353,19 +1507,19 @@ int main(int argc, char **argv)
                 float trim_pos = (rendering_config.trim_x_max + rendering_config.trim_x_min) / 2.0;
                 float trim_width = rendering_config.trim_x_max - rendering_config.trim_x_min;
                 reset_pt |= ui::add_slider(&panel, "X POS", &trim_pos, 0.0, 1.0);
-                ui::add_slider(&panel, "X WIDTH", &trim_width, 0.0, 1.0);
+                reset_pt |=ui::add_slider(&panel, "X WIDTH", &trim_width, 0.0, 1.0);
                 rendering_config.trim_x_min = smoothing_coef * rendering_config.trim_x_min + (1.0-smoothing_coef) * (trim_pos - 0.5 * trim_width);
                 rendering_config.trim_x_max = smoothing_coef * rendering_config.trim_x_max + (1.0-smoothing_coef) * (trim_pos + 0.5 * trim_width);
                 trim_pos = (rendering_config.trim_y_max + rendering_config.trim_y_min) / 2.0;
                 trim_width = rendering_config.trim_y_max - rendering_config.trim_y_min;
                 reset_pt |= ui::add_slider(&panel, "Y POS", &trim_pos, 0.0, 1.0);
-                ui::add_slider(&panel, "Y WIDTH", &trim_width, 0.0, 1.0);
+                reset_pt |=ui::add_slider(&panel, "Y WIDTH", &trim_width, 0.0, 1.0);
                 rendering_config.trim_y_min = smoothing_coef * rendering_config.trim_y_min + (1.0-smoothing_coef) * (trim_pos - 0.5 * trim_width);
                 rendering_config.trim_y_max = smoothing_coef * rendering_config.trim_y_max + (1.0-smoothing_coef) * (trim_pos + 0.5 * trim_width);
                 trim_pos = (rendering_config.trim_z_max + rendering_config.trim_z_min) / 2.0;
                 trim_width = rendering_config.trim_z_max - rendering_config.trim_z_min;
                 reset_pt |= ui::add_slider(&panel, "Z POS", &trim_pos, 0.0, 1.0);
-                ui::add_slider(&panel, "Z WIDTH", &trim_width, 0.0, 1.0);
+                reset_pt |=ui::add_slider(&panel, "Z WIDTH", &trim_width, 0.0, 1.0);
                 rendering_config.trim_z_min = smoothing_coef * rendering_config.trim_z_min + (1.0-smoothing_coef) * (trim_pos - 0.5 * trim_width);
                 rendering_config.trim_z_max = smoothing_coef * rendering_config.trim_z_max + (1.0-smoothing_coef) * (trim_pos + 0.5 * trim_width);
             }
@@ -1451,6 +1605,31 @@ int main(int argc, char **argv)
                 rendering_config.trace_max = math::pow(HISTOGRAM_BASE, trmax);
                 // reset_pt |= ui::add_slider(&panel, "GUIDING MAG", &rendering_config.guiding_strength, 0.0, 0.6);
 
+                // Sphere Position Offset
+                float sphere_pos = rendering_config.sphere_pos;
+                reset_pt |= ui::add_slider(&panel, "Sphere Position", &sphere_pos, -1000.0, 1000.0);
+                rendering_config.sphere_pos = sphere_pos;
+                
+                // Point Light Position Offset
+                float light_pos = rendering_config.light_pos;
+                reset_pt |= ui::add_slider(&panel, "Light Position", &light_pos, -1000.0, 1000.0);
+                rendering_config.light_pos = light_pos;
+
+                // Shininess Term
+                float shininess = rendering_config.shininess;
+                reset_pt |= ui::add_slider(&panel, "shininess", &shininess, 1.0, 2000.0);
+                rendering_config.shininess = math::floor(shininess);
+
+                // focus distance
+                float focus_dist = rendering_config.focus_dist;
+                reset_pt |= ui::add_slider(&panel, "focus_dist", &focus_dist, 0.0, 1.0);
+                rendering_config.focus_dist = focus_dist;
+
+                // Some slider for debug
+                float some_slider = rendering_config.some_slider;
+                reset_pt |= ui::add_slider(&panel, "some_slider", &some_slider, 0.0, 1.0);
+                rendering_config.some_slider = some_slider;
+
                 float expo = log(rendering_config.exposure) / log(10.0);
                 if (bool(rendering_config.compressive_accumulation))
                     reset_pt |= ui::add_slider(&panel, "EXPOSURE", &expo, -5.0, 5.0);
@@ -1468,6 +1647,9 @@ int main(int argc, char **argv)
             ui::end();
         }
 
+        if (run_mold) {
+            ++simulation_config.n_iteration;
+        }
         graphics::swap_frames();
     }
 
@@ -1483,7 +1665,9 @@ int main(int argc, char **argv)
     graphics::release(&draw_compute_shader_particle);
     graphics::release(&blit_compute_shader);
     graphics::release(&compute_shader);
+    graphics::release(&sort_shader);
     graphics::release(&decay_compute_shader);
+    graphics::release(&decay_trail_shader);
     graphics::release(&cs_density_histo);
     graphics::release(&quad_mesh);
     graphics::release(&super_quad_mesh);
