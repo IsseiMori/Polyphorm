@@ -14,6 +14,9 @@ Screen Y = 1000
 Screen X = 1400
 Screen Y = 850
 
+Screen X = 1920
+Screen Y = 1080
+
 Grid resolution = 720
 
 Agents number = 1000000

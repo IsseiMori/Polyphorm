@@ -708,16 +708,16 @@ int main(int argc, char **argv)
     rendering_config.slime_ior = 1.45;
     rendering_config.light_pos = 0;
     rendering_config.sphere_pos = 0;
-    rendering_config.shininess = 64;
+    rendering_config.shininess = 1;    // 64
 
     rendering_config.aperture = 0;  // default 0.8
     rendering_config.focus_dist = 0.7;
 
     // Compute sigma_a and sigma_s for each of RGB
-    rendering_config.sigma_t_rgb = 0.6;
-    rendering_config.albedo_r = 0.85;   // 0.92
-    rendering_config.albedo_g = 0.75;   // 0.88
-    rendering_config.albedo_b = 0.24;   // 0.05
+    rendering_config.sigma_t_rgb = 0.95; // 0.6
+    rendering_config.albedo_r = 0.51;   // 0.85, 0.92
+    rendering_config.albedo_g = 0.42;   // 0.75, 0.88
+    rendering_config.albedo_b = 0.30;   // 0.24, 0.05
     rendering_config.some_slider = 0;
 
     rendering_config.sigma1_a_r = (1 - rendering_config.albedo_r) * rendering_config.sigma_t_rgb;
