@@ -1135,7 +1135,7 @@ float3 get_incident_L(float3 rp, float3 rd, float3 c_low, float3 c_high, int nBo
             // else return L + throughput_rgb * get_sky_L(rd);
         }
 
-        //return float3(1,0,0);
+        // return float3(1,0,0);
 
         // Move to the next intersection
         rp += t_event * rd;
@@ -1350,7 +1350,9 @@ void main(uint3 threadIDInGroup : SV_GroupThreadID, uint3 groupID : SV_GroupID,
             float lens_radius = aperture / 2.0;
             float2 random_disk = sample_disk(rng);
             float2 random_lens = lens_radius * random_disk;
-            float3 offset = camZ * random_lens.x + camY * random_lens.y;
+
+            // I have no idea but offsetting Y and X does the job
+            float3 offset = camY * random_lens.x + camX * random_lens.y;
 
             rp = rp + offset * focus_dist;
             rd = normalize(rd - offset / focus_dist);
