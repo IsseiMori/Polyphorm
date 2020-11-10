@@ -527,6 +527,10 @@ int main(int argc, char **argv)
     // HDRI Image for Vol Path Rendering
     Texture2D nature_hdri_tex = graphics::load_texture2D("textures/autumn_ground_8k.tga");
     TextureSampler tex_sampler_nature_hdri = graphics::get_texture_sampler();
+
+    // unsmoothed version of trace for specular
+    Texture3D trace_unsmoothed_tex = graphics::load_texture3D("export_1/trace.dds");
+    TextureSampler tex_sampler_trace_unsmoothed = graphics::get_texture_sampler(CLAMP, D3D11_FILTER_ANISOTROPIC);
     
 	graphics::set_blend_state(BlendType::ALPHA);
 
@@ -710,14 +714,14 @@ int main(int argc, char **argv)
     rendering_config.sphere_pos = 0;
     rendering_config.shininess = 64;
 
-    rendering_config.aperture = 30;  // default 0.8, 0 for no blur,
+    rendering_config.aperture = 0;  // default 30, 0 for no blur,
     rendering_config.focus_dist = 0.7;
 
     // Compute sigma_a and sigma_s for each of RGB
     rendering_config.sigma_t_rgb = 0.6;
-    rendering_config.albedo_r = 0.85;   // 0.92
-    rendering_config.albedo_g = 0.75;   // 0.88
-    rendering_config.albedo_b = 0.24;   // 0.05
+    rendering_config.albedo_r = 0.94;   // 0.92, 0.85
+    rendering_config.albedo_g = 0.88;   // 0.88, 0.75
+    rendering_config.albedo_b = 0.15;   // 0.05, 0.24
     rendering_config.some_slider = 0;
 
     rendering_config.sigma1_a_r = (1 - rendering_config.albedo_r) * rendering_config.sigma_t_rgb;
@@ -1196,6 +1200,9 @@ int main(int argc, char **argv)
                 // Nature HDRI Texture
                 graphics::set_texture_sampled_compute(&nature_hdri_tex, 5);
                 graphics::set_texture_sampler_compute(&tex_sampler_nature_hdri, 5);
+
+                graphics::set_texture_sampled_compute(&trace_unsmoothed_tex, 6);
+                graphics::set_texture_sampler_compute(&tex_sampler_trace_unsmoothed, 6);
                 
                 if (run_pt && rendering_config.pt_iteration < 1e5) {
                     graphics::set_compute_shader(&cs_volpath);
@@ -1232,6 +1239,7 @@ int main(int argc, char **argv)
                 graphics::draw_mesh(&quad_mesh);
                 graphics::unset_texture(0);
                 graphics::unset_texture(5);
+                graphics::unset_texture(6);
             }
         }
 

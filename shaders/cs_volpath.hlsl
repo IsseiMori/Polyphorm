@@ -42,6 +42,9 @@ SamplerState tex_palette_data_sampler : register(s4);
 Texture2D tex_nature_hdri : register(t5);
 SamplerState tex_nature_hdri_sampler : register(s5);
 
+Texture3D tex_trace_unsmoothed : register(t6);
+SamplerState tex_trace_unsmoothed_sampler : register(s6);
+
 cbuffer ConfigBuffer : register(b4)
 {
     float4x4 projection_matrix;
@@ -223,11 +226,24 @@ float get_rho(float3 rp) {
     return trace_to_rho(trace);
 }
 
+float get_rho_unsmoothed(float3 rp) {
+    float trace = tex_trace_unsmoothed.SampleLevel(tex_trace_unsmoothed_sampler, rp / float3(grid_x, grid_y, grid_z), 0).r;
+    return trace_to_rho(trace);
+}
+
 float3 get_rho_gradient(float3 rp, float dp) {
     float3 gradient;
     gradient.x = get_rho(rp + float3(dp, 0.0, 0.0)) - get_rho(rp - float3(dp, 0.0, 0.0));
     gradient.y = get_rho(rp + float3(0.0, dp, 0.0)) - get_rho(rp - float3(0.0, dp, 0.0));
     gradient.z = get_rho(rp + float3(0.0, 0.0, dp)) - get_rho(rp - float3(0.0, 0.0, dp));
+    return gradient / dp;
+}
+
+float3 get_rho_unsmoothed_gradient(float3 rp, float dp) {
+    float3 gradient;
+    gradient.x = get_rho_unsmoothed(rp + float3(dp, 0.0, 0.0)) - get_rho_unsmoothed(rp - float3(dp, 0.0, 0.0));
+    gradient.y = get_rho_unsmoothed(rp + float3(0.0, dp, 0.0)) - get_rho_unsmoothed(rp - float3(0.0, dp, 0.0));
+    gradient.z = get_rho_unsmoothed(rp + float3(0.0, 0.0, dp)) - get_rho_unsmoothed(rp - float3(0.0, 0.0, dp));
     return gradient / dp;
 }
 
@@ -519,11 +535,26 @@ float3 get_normal(float3 rp) {
     return normalize(-get_rho_gradient(rp, 1.0));
 }
 
+// Normal is defined as a density gradient
+// Offset is variable
+float3 get_normal_unsmoothed(float3 rp) {
+    return normalize(-get_rho_unsmoothed_gradient(rp, 1.0));
+}
+
 // rp: surface position
 // rd: light to surface
 // out: surface to reflected light
 float3 reflect(float3 rp, float3 rd) {
     float3 n = get_normal(rp);
+
+    return rd - 2 * dot(normalize(rd), n) * n;
+}
+
+// rp: surface position
+// rd: light to surface
+// out: surface to reflected light
+float3 reflect_unsmoothed(float3 rp, float3 rd) {
+    float3 n = get_normal_unsmoothed(rp);
 
     return rd - 2 * dot(normalize(rd), n) * n;
 }
@@ -903,8 +934,8 @@ bool intersect_torus(float3 rp, float3 rd) {
     float3 center = float3(1.5 * grid_x, grid_y/2.0, grid_z/2.0);
     
     // Torus Config
-    float R = 300;
-    float r = 50;
+    float R = 100;
+    float r = 20;
 
     float3 bb_max = R+r;
     float3 bb_min = -R-r;
@@ -941,6 +972,23 @@ bool intersect_torus(float3 rp, float3 rd) {
 
     if (n > 0 && v4[0] > 0) return true;
     else return false;
+}
+
+// DEBUG: Sphere Material Test
+bool intersect_sphere_light(float3 rp, float3 rd, float3 center, float radius, inout float t_intersect) {
+
+    float3 L = rp - center;
+    float a = dot(rd, rd);
+    float b = 2 * dot(rd, L);
+    float c = dot(L, L) - radius * radius;
+    float t0, t1;
+    if (!solveQuadratic(a, b, c, t0, t1)) return false;
+    if (t0 < 0) {
+        t0 = t1;
+        return false;
+    }
+    t_intersect = t0;
+    return true;
 }
 
 float3 calc_ambient_color(float3 rp, float3 rd, float bokeh, inout RNG rng) {
@@ -1056,6 +1104,41 @@ float3 apply_glossy(float3 rd, float n, inout RNG rng) {
     return 0;
 }
 
+// rd: vector before perturbation
+// degree: degree angle of perturbation range. 0 for no perturbation, 90 for hemisphere sampling
+float3 perturb_vector(float3 rd, float degree, inout RNG rng) {
+
+    // any vector not parallel to rd
+    float3 some_vector = float3(1,0,0);
+    float3 target_vector = normalize(rd);
+    
+    // Now we have 3 basis vector, one of them is rd
+    float3 cross_vector = normalize(cross(target_vector, some_vector));
+
+    // Generate 2 random numbers
+    float s = rng.random_float();
+    float r = rng.random_float();
+
+    // phi rotation of the cone 0 < 2 pi
+    float phi = 2 * PI * r;
+
+    // 1 (0 degree) to 0 (90 degree)
+    float h = cos(degree / 180 * PI);
+    // max 1 to min h (1 to 0)
+    float z = h + ( 1 - h ) * r;
+    // 0 to displacement from the center axis of the cone
+    float sinT = sqrt( 1 - z * z );
+
+    // Translate the above spherical coordinate to xyz coordinate
+    float x = cos( phi ) * sinT;
+    float y = sin( phi ) * sinT;
+
+    // Apply the vector rotation to the original vector space
+    float3 perturbed = some_vector * x + cross_vector * y + target_vector * z;
+
+    return perturbed;
+}
+
 float3 calc_fake_key_light(float3 rd) {
     float3 light_dir = float3(1,0,0);
 
@@ -1159,12 +1242,14 @@ float3 get_incident_L(float3 rp, float3 rd, float3 c_low, float3 c_high, int nBo
 
             // REFLECT
             if (rng.random_float() < reflect_chance) {
-                rd = reflect(rp, rd);
+                rd = reflect_unsmoothed(rp, rd);
+                // rd = perturb_vector(rd, 5, rng);
             }
             else {
                 float3 refract_dir = refract(rp, rd);
                 if (refract_dir.x == 0 && refract_dir.y == 0 && refract_dir.z == 0) {
-                    rd = reflect(rp, rd);
+                    rd = reflect_unsmoothed(rp, rd);
+                    // rd = perturb_vector(rd, 5, rng);
                 }
                 else {
                     rd = refract_dir;
@@ -1224,18 +1309,27 @@ float3 get_incident_L(float3 rp, float3 rd, float3 c_low, float3 c_high, int nBo
         // Since light raytracing and volume raytracing are independent, peform light tracing only when out-volume mode
         if (!in_volume) {
             if (bounce_n == 0) {
-                if (intersect_torus(rp, rd)) {
-                    int torus_light_exposure = 4;
-                    return L + throughput_rgb * float3(1,1,1) * pow(2, torus_light_exposure);
-                }
+                // if (intersect_torus(rp, rd)) {
+                //     int torus_light_exposure = 6;
+                //     return L + throughput_rgb * float3(1,1,1) * pow(2, torus_light_exposure);
+                // }
                 //if (intersect_plane(float3(0, -100, -100), float3(0, 100, 100), rp, rd)) return L + throughput_rgb * float3(1,1,1) * 3.0;
+
+                float t_light = 0;
+                float3 light_center = float3(1.5 * grid_x, grid_y/2.0, grid_z/2.0);
+                float light_radius = 100;
+
+                if (intersect_sphere_light(rp, rd, light_center, light_radius, t_light)) {
+                    int light_exposure = 5;
+                    return L + throughput_rgb * float3(1,1,1) * pow(2, light_exposure);
+                }
             }
             else {
                 bool hit_surface_shadow_ray = false;
                 delta_tracking_out_volume(rp, rd, 0.0, t.y, rho_max_inv, rng, hit_surface_shadow_ray);
 
                 if (!hit_surface_shadow_ray) {
-                    return L + throughput_rgb * float3(1,1,1) * calc_fake_key_light(rd) * pow(2, 4);
+                    return L + throughput_rgb * float3(1,1,1) * calc_fake_key_light(rd) * pow(2, 3);
                 }
             }
         }
