@@ -712,13 +712,13 @@ int main(int argc, char **argv)
     rendering_config.slime_ior = 1.45;
     rendering_config.light_pos = 0;
     rendering_config.sphere_pos = 0;
-    rendering_config.shininess = 64;
+    rendering_config.shininess = 32;    //64
 
-    rendering_config.aperture = 0;  // default 30, 0 for no blur,
-    rendering_config.focus_dist = 0.7;
+    rendering_config.aperture = 15;  // default 30, 0 for no blur,
+    rendering_config.focus_dist = 0.55; // 0.7 center-ish
 
     // Compute sigma_a and sigma_s for each of RGB
-    rendering_config.sigma_t_rgb = 0.6;
+    rendering_config.sigma_t_rgb = 0.8;
     rendering_config.albedo_r = 0.94;   // 0.92, 0.85
     rendering_config.albedo_g = 0.88;   // 0.88, 0.75
     rendering_config.albedo_b = 0.15;   // 0.05, 0.24
