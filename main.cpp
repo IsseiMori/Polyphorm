@@ -714,14 +714,14 @@ int main(int argc, char **argv)
     rendering_config.sphere_pos = 0;
     rendering_config.shininess = 32;    //64
 
-    rendering_config.aperture = 15;  // default 30, 0 for no blur,
+    rendering_config.aperture = 0;  // default 30, 0 for no blur, 12
     rendering_config.focus_dist = 0.55; // 0.7 center-ish
 
     // Compute sigma_a and sigma_s for each of RGB
-    rendering_config.sigma_t_rgb = 0.8;
-    rendering_config.albedo_r = 0.94;   // 0.92, 0.85
-    rendering_config.albedo_g = 0.88;   // 0.88, 0.75
-    rendering_config.albedo_b = 0.15;   // 0.05, 0.24
+    rendering_config.sigma_t_rgb = 0.7;
+    rendering_config.albedo_r = 0.98;   // 0.92, 0.85
+    rendering_config.albedo_g = 0.90;   // 0.88, 0.75
+    rendering_config.albedo_b = 0.00;   // 0.05, 0.24
     rendering_config.some_slider = 0;
 
     rendering_config.sigma1_a_r = (1 - rendering_config.albedo_r) * rendering_config.sigma_t_rgb;
@@ -786,7 +786,7 @@ int main(int argc, char **argv)
     // Render loop
     bool is_running = true;
     bool is_a = true;
-    bool show_ui = true;
+    bool show_ui = false;
     bool run_mold = false;
     bool turning_camera = false;
     bool render_dof = true;
@@ -794,11 +794,12 @@ int main(int argc, char **argv)
     bool capture_screen = false;
     bool make_screenshot = false;
     bool capture_agents = false;
-    bool compute_histogram = true;
+    bool compute_histogram = false;
     bool run_pt = true;
     bool reset_pt = false;
     float background_color = 0.0;
-    VisualizationMode vis_mode = VisualizationMode::VM_PARTICLES;
+    // VisualizationMode vis_mode = VisualizationMode::VM_PARTICLES;
+    VisualizationMode vis_mode = VisualizationMode::VM_PATH_TRACING;
 
     bool smooth_trail = true;
 
@@ -1392,12 +1393,27 @@ int main(int argc, char **argv)
 
         // Frame capturing
         if (is_running && make_screenshot) {
-            graphics::capture_current_frame();
+            uint32_t frame_number = graphics::capture_current_frame();
+            std::stringstream stream;
+            stream << "capture\\frame" << frame_number;
+            graphics::save_texture2D_HDR(&display_tex, stream.str());
             make_screenshot = false;
         }
         if (is_running && capture_screen) {
             graphics::capture_current_frame();
         }
+
+        // // Frame capturing
+        // if (is_running && make_screenshot) {
+        //     graphics::capture_current_frame();
+        //     make_screenshot = false;
+        //     printf("%f", rendering_config.camera_x);
+        //     printf("%f", rendering_config.camera_y);
+        //     printf("%f", rendering_config.camera_z);
+        // }
+        // if (is_running && capture_screen) {
+        //     graphics::capture_current_frame();
+        // }
 
         // UI
         if (show_ui) {

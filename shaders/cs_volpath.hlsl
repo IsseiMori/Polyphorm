@@ -249,6 +249,9 @@ float3 get_rho_unsmoothed_gradient(float3 rp, float dp) {
 
 float get_halo(float3 rp) {
     float halo = tex_deposit.SampleLevel(tex_deposit_sampler, rp / float3(grid_x, grid_y, grid_z), 0).r;
+    //int halo_r = halo.r;
+    // if (halo) return 0;
+    //return 0;
     // return 0.01 * galaxy_weight * halo;
     return halo;
 }
@@ -349,9 +352,9 @@ float delta_tracking_multi_layers(float3 rp, float3 rd, float t_min, float t_max
 
     if (t_min >= t_max) return t;   // t_min > t_max is not supposed to happen
 	do {
-		t += delta_step(sigma_max_inv, rng.random_float());
+        //if (get_halo(rp + t * rd) > 600) return 0;
 
-        // if (get_halo(rp + t * rd) > 500) return 0;
+		t += delta_step(sigma_max_inv, rng.random_float());
 
         event_rho = get_rho(rp + t * rd);
 
@@ -364,6 +367,7 @@ float delta_tracking_multi_layers(float3 rp, float3 rd, float t_min, float t_max
         if (current_layer == 1) {
             if (event_rho > 0.5) {
                 current_layer = 2;
+                //if (get_halo(rp + t * rd) > 500) return 0;
             }
             if (event_rho < 0.4) {
                 current_layer = 0;
@@ -1192,13 +1196,8 @@ float3 get_incident_L(float3 rp, float3 rd, float3 c_low, float3 c_high, int nBo
             t_event = sphere_tracking_out_volume(rp, rd, 0.0, t.y, rho_max_inv, rng, hit_surface);
         }
         #else
-        if (in_volume) {
-            t_event = delta_tracking_multi_layers(rp, rd, 0.0, t.y, rho_max_inv, rng, current_layer, hit_surface);
-            if (t_event == 0) return float3(1,1,5);
-        }
-        else {
-            t_event = delta_tracking_multi_layers(rp, rd, 0.0, t.y, rho_max_inv, rng, current_layer, hit_surface);
-        }
+        t_event = delta_tracking_multi_layers(rp, rd, 0.0, t.y, rho_max_inv, rng, current_layer, hit_surface);
+        if (t_event == 0) return float3(1,1,5);
         #endif
 
         // If the ray gets out of AABB, return color
@@ -1453,8 +1452,8 @@ void main(uint3 threadIDInGroup : SV_GroupThreadID, uint3 groupID : SV_GroupID,
             path_L = get_incident_L(rp, rd, float3(0.0, 0.0, 0.0), float3(grid_x, grid_y, grid_z), n_bounces + 1, rng);
         }
     } else {
-        path_L = get_sky_L(rd);
-        //path_L = float3(0,0,0);
+        //path_L = get_sky_L(rd);
+        path_L = float3(0,0,0);
     }
 
     // Accumulate LDR or HDR values?

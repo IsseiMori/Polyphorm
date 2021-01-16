@@ -657,6 +657,28 @@ void graphics::save_texture2D(Texture2D *texture, std::string filename)
 	image.Release();
 }
 
+void graphics::save_texture2D_HDR(Texture2D *texture, std::string filename)
+{
+    DirectX::ScratchImage image;
+    if (!SUCCEEDED(DirectX::CaptureTexture(graphics_context->device, graphics_context->context, texture->texture, image))) {
+        PRINT_DEBUG("Failed to capture 2D HDR texture.\n");
+        printf("Failed to capture 2D HDR texture.\n");
+        return;
+    }
+    std::wstringstream stream;
+    stream << filename.c_str() << ".hdr";
+	HRESULT hr = DirectX::SaveToHDRFile(*image.GetImages(), stream.str().c_str());
+	wprintf(L" FAILED (%x)\n", static_cast<unsigned int>(hr));
+    if (!SUCCEEDED(hr)) {
+        PRINT_DEBUG("Failed to store 3D texture to specified HDR file.\n");
+        printf("Failed to store 3D texture to specified HDR file.\n");
+        image.Release();
+        return;
+    }
+    image.Release();
+}
+
+
 void graphics::save_texture3D(Texture3D *texture, std::string filename)
 {
 	DirectX::ScratchImage image;
@@ -688,24 +710,46 @@ void graphics::save_texture3D(Texture3D *texture, std::string filename)
 	image.Release();
 }
 
-void graphics::capture_current_frame()
+
+// void graphics::capture_current_frame()
+// {
+// 	ID3D11Texture2D* pBuffer;
+// 	swap_chain->swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBuffer);
+
+// 	Texture2D texture_to_save;
+// 	D3D11_TEXTURE2D_DESC td;
+// 	pBuffer->GetDesc(&td);
+// 	graphics_context->device->CreateTexture2D(&td, NULL, &texture_to_save.texture);
+// 	graphics_context->context->CopyResource(texture_to_save.texture, pBuffer);
+
+// 	static uint32_t count = 0;
+// 	std::stringstream stream;
+// 	stream << "capture\\frame" << count++;
+// 	printf("Capturing %s\n", stream.str().c_str());
+// 	save_texture2D(&texture_to_save, stream.str());
+
+// 	RELEASE_DX_RESOURCE(texture_to_save.texture);
+// }
+
+uint32_t graphics::capture_current_frame()
 {
-	ID3D11Texture2D* pBuffer;
-	swap_chain->swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBuffer);
+    ID3D11Texture2D* pBuffer;
+    swap_chain->swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBuffer);
+	
+    Texture2D texture_to_save;
+    D3D11_TEXTURE2D_DESC td;
+    pBuffer->GetDesc(&td);
+    graphics_context->device->CreateTexture2D(&td, NULL, &texture_to_save.texture);
+    graphics_context->context->CopyResource(texture_to_save.texture, pBuffer);
 
-	Texture2D texture_to_save;
-	D3D11_TEXTURE2D_DESC td;
-	pBuffer->GetDesc(&td);
-	graphics_context->device->CreateTexture2D(&td, NULL, &texture_to_save.texture);
-	graphics_context->context->CopyResource(texture_to_save.texture, pBuffer);
+    static uint32_t count = 0;
+    std::stringstream stream;
+    stream << "capture\\frame" << count++;
+    printf("Capturing %s\n", stream.str().c_str());
+    save_texture2D(&texture_to_save, stream.str());
 
-	static uint32_t count = 0;
-	std::stringstream stream;
-	stream << "capture\\frame" << count++;
-	printf("Capturing %s\n", stream.str().c_str());
-	save_texture2D(&texture_to_save, stream.str());
-
-	RELEASE_DX_RESOURCE(texture_to_save.texture);
+    RELEASE_DX_RESOURCE(texture_to_save.texture);
+    return count-1;
 }
 
 void graphics::set_texture(RenderTarget *buffer, uint32_t slot)

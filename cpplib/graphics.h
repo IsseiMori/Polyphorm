@@ -274,7 +274,9 @@ namespace graphics
 	Texture3D load_texture3D(std::string filename);
 	void save_texture3D(Texture3D *texture, std::string filename);
 	void save_texture2D(Texture2D *texture, std::string filename);
-	void capture_current_frame();
+	void save_texture2D_HDR(Texture2D *texture, std::string filename);
+	//void capture_current_frame();
+	uint32_t capture_current_frame();
 
 	// Set texture to accessible from shaders
 	void set_texture(Texture3D *texture, uint32_t slot);
