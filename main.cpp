@@ -506,12 +506,12 @@ int main(int argc, char **argv)
     // Textures for the simulation
     // Texture3D trail_tex_A = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16_FLOAT, 2);
     // Texture3D trail_tex_B = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16_FLOAT, 2);
-    Texture3D trail_tex_A = graphics::load_texture3D("export_1/deposit.dds");
-    Texture3D trail_tex_B = graphics::load_texture3D("export_1/deposit.dds");
+    Texture3D trail_tex_A = graphics::load_texture3D("export_realdata/deposit.dds");
+    Texture3D trail_tex_B = graphics::load_texture3D("export_realdata/deposit.dds");
     #ifdef VELOCITY_ANALYSIS
     Texture3D trace_tex = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16G16B16A16_FLOAT, 8);
     #else
-    Texture3D trace_tex = graphics::load_texture3D("export_1/trace.dds");
+    Texture3D trace_tex = graphics::load_texture3D("export_realdata/trace.dds");
     // Texture3D trace_tex = graphics::get_texture3D(NULL, GRID_RESOLUTION_X, GRID_RESOLUTION_Y, GRID_RESOLUTION_Z, DXGI_FORMAT_R16_FLOAT, 2);
     #endif
     Texture2D display_tex = graphics::get_texture2D(NULL, window_width, window_height, DXGI_FORMAT_R32G32B32A32_FLOAT, 16);
@@ -529,7 +529,7 @@ int main(int argc, char **argv)
     TextureSampler tex_sampler_nature_hdri = graphics::get_texture_sampler();
 
     // unsmoothed version of trace for specular
-    Texture3D trace_unsmoothed_tex = graphics::load_texture3D("export_1/trace.dds");
+    Texture3D trace_unsmoothed_tex = graphics::load_texture3D("export_realdata/trace.dds");
     TextureSampler tex_sampler_trace_unsmoothed = graphics::get_texture_sampler(CLAMP, D3D11_FILTER_ANISOTROPIC);
     
 	graphics::set_blend_state(BlendType::ALPHA);
@@ -707,7 +707,7 @@ int main(int argc, char **argv)
     rendering_config.ambient_trace = 0.0;
     rendering_config.compressive_accumulation = 0;
     rendering_config.guiding_strength = 0.1;
-    rendering_config.scattering_anisotropy = 0.5;
+    rendering_config.scattering_anisotropy = -0.8;
 
     rendering_config.slime_ior = 1.45;
     rendering_config.light_pos = 0;
@@ -1393,6 +1393,10 @@ int main(int argc, char **argv)
 
         // Frame capturing
         if (is_running && make_screenshot) {
+            printf("%f ", rendering_config.camera_x);
+            printf("%f ", rendering_config.camera_y);
+            printf("%f ", rendering_config.camera_z);
+
             uint32_t frame_number = graphics::capture_current_frame();
             std::stringstream stream;
             stream << "capture\\frame" << frame_number;
