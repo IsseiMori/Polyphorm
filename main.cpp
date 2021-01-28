@@ -233,18 +233,19 @@ struct RenderingConfig {
     float slime_ior;
     float aperture;
 
+    bool halo_on;
+    //bool dof_on;
     float focus_dist;
     float light_pos;
+
     float sphere_pos;
     int shininess;
-
-    float some_slider;
+    bool dof_on;
     float sigma_t_rgb;
+
     float albedo_r;
     float albedo_g;
-    
     float albedo_b;
-    int tmp1;
     int tmp2;
     int tmp3;
 
@@ -707,22 +708,25 @@ int main(int argc, char **argv)
     rendering_config.ambient_trace = 0.0;
     rendering_config.compressive_accumulation = 0;
     rendering_config.guiding_strength = 0.1;
-    rendering_config.scattering_anisotropy = -0.8;
+    rendering_config.scattering_anisotropy = 0.85; // 0.85 optimal
 
     rendering_config.slime_ior = 1.45;
     rendering_config.light_pos = 0;
     rendering_config.sphere_pos = 0;
     rendering_config.shininess = 32;    //64
 
-    rendering_config.aperture = 0;  // default 30, 0 for no blur, 12
-    rendering_config.focus_dist = 0.55; // 0.7 center-ish
+    rendering_config.aperture = 20;  // default 30, 0 for no blur, 12
+    rendering_config.focus_dist = 5; // close 2.0 center-ish
+    rendering_config.halo_on = false; // close 2.0 center-ish
+    //rendering_config.dof_on = true;
 
     // Compute sigma_a and sigma_s for each of RGB
     rendering_config.sigma_t_rgb = 0.7;
-    rendering_config.albedo_r = 0.98;   // 0.92, 0.85
-    rendering_config.albedo_g = 0.90;   // 0.88, 0.75
+    rendering_config.albedo_r = 0.99;   // 0.92, 0.85 0.98
+    rendering_config.albedo_g = 0.93;   // 0.88, 0.75 0.90
     rendering_config.albedo_b = 0.00;   // 0.05, 0.24
-    rendering_config.some_slider = 0;
+    rendering_config.dof_on = true;
+
 
     rendering_config.sigma1_a_r = (1 - rendering_config.albedo_r) * rendering_config.sigma_t_rgb;
     rendering_config.sigma1_a_g = (1 - rendering_config.albedo_g) * rendering_config.sigma_t_rgb;
@@ -786,7 +790,7 @@ int main(int argc, char **argv)
     // Render loop
     bool is_running = true;
     bool is_a = true;
-    bool show_ui = false;
+    bool show_ui = true;
     bool run_mold = false;
     bool turning_camera = false;
     bool render_dof = true;
@@ -802,6 +806,7 @@ int main(int argc, char **argv)
     VisualizationMode vis_mode = VisualizationMode::VM_PATH_TRACING;
 
     bool smooth_trail = true;
+    int batch_rendering_number = 1;
 
     // Update simulation config
     graphics::update_constant_buffer(&config_buffer, &simulation_config);
@@ -1391,6 +1396,44 @@ int main(int argc, char **argv)
             ui::end();
         }
 
+        // // Batch Rendering
+        // if (batch_rendering_number == 1 && rendering_config.pt_iteration == 2000) {
+
+        //     uint32_t frame_number = graphics::capture_current_frame();
+        //     std::stringstream stream;
+        //     stream << "capture\\frame" << frame_number;
+        //     graphics::save_texture2D_HDR(&display_tex, stream.str());
+        //     make_screenshot = false;
+
+        //     rendering_config.dof_on = false;
+        //     reset_pt = true;
+
+        //     batch_rendering_number += 1;
+        // }
+        // if (batch_rendering_number == 2 && rendering_config.pt_iteration == 2000) {
+
+        //     uint32_t frame_number = graphics::capture_current_frame();
+        //     std::stringstream stream;
+        //     stream << "capture\\frame" << frame_number;
+        //     graphics::save_texture2D_HDR(&display_tex, stream.str());
+        //     make_screenshot = false;
+
+        //     rendering_config.dof_on = true;
+        //     rendering_config.halo_on = true;
+        //     reset_pt = true;
+
+        //     batch_rendering_number += 1;
+        // }
+        // if (batch_rendering_number == 3 && rendering_config.pt_iteration == 10000) {
+
+        //     uint32_t frame_number = graphics::capture_current_frame();
+        //     std::stringstream stream;
+        //     stream << "capture\\frame" << frame_number;
+        //     graphics::save_texture2D_HDR(&display_tex, stream.str());
+        //     make_screenshot = false;
+        // }
+        
+
         // Frame capturing
         if (is_running && make_screenshot) {
             printf("%f ", rendering_config.camera_x);
@@ -1573,13 +1616,13 @@ int main(int argc, char **argv)
 
                 // focus distance
                 float focus_dist = rendering_config.focus_dist;
-                reset_pt |= ui::add_slider(&panel, "focus_dist", &focus_dist, 0.0, 1.0);
+                reset_pt |= ui::add_slider(&panel, "focus_dist", &focus_dist, 0.0, 10.0);
                 rendering_config.focus_dist = focus_dist;
 
                 // Some slider for debug
-                float some_slider = rendering_config.some_slider;
-                reset_pt |= ui::add_slider(&panel, "some_slider", &some_slider, 0.0, 1.0);
-                rendering_config.some_slider = some_slider;
+                bool dof_on = rendering_config.dof_on;
+                reset_pt |= ui::add_toggle(&panel, "DoF ON", &dof_on);
+                rendering_config.dof_on = dof_on;
 
                 float expo = log(rendering_config.exposure) / log(10.0);
                 if (bool(rendering_config.compressive_accumulation))
@@ -1587,6 +1630,10 @@ int main(int argc, char **argv)
                 else
                     ui::add_slider(&panel, "EXPOSURE", &expo, -5.0, 5.0);
                 rendering_config.exposure = math::pow(10.0, expo);
+
+                bool halo_on = bool(rendering_config.halo_on);
+                reset_pt |= ui::add_toggle(&panel, "Halo ON", &halo_on);
+                rendering_config.halo_on = bool(halo_on);
 
                 bool compress_L = bool(rendering_config.compressive_accumulation);
                 reset_pt |= ui::add_toggle(&panel, "COMPRESSIVE EXPOSURE", &compress_L);

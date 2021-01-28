@@ -98,18 +98,22 @@ cbuffer ConfigBuffer : register(b4)
     float sigma1_a_b;
     float slime_ior;
     float aperture;
-    
+
+    //bool dof_on;
+    bool halo_on;     
     float focus_dist;
     float light_pos;
     float sphere_pos;
-    int shininess;
 
-    float some_slider;
-    int tmp1;
+    int shininess;
+    bool dof_on;
+    float sigma_t_rgb;
+    float albedo_r;
+
+    float albedo_g;
+    float albedo_b;
     int tmp2;
     int tmp3;
-    
-
 };
 
 struct RNG {
@@ -399,7 +403,7 @@ float delta_tracking_single_layers(float3 rp, float3 rd, float t_min, float t_ma
 
     if (t_min >= t_max) return t;   // t_min > t_max is not supposed to happen
 	do {
-        //if (get_halo(rp + t * rd) > 600) return 0;
+        if (halo_on) if (get_halo(rp + t * rd) > 60) return 0;
 
 		t += delta_step(sigma_max_inv, rng.random_float());
 
@@ -1178,13 +1182,13 @@ float3 perturb_vector(float3 rd, float degree, inout RNG rng) {
 }
 
 float3 calc_fake_key_light(float3 rd) {
-    float3 light_dir = float3(1,0,0);
+    float3 light_dir = float3(-1,0,0);
 
     light_dir = normalize(light_dir);
 
     float cos_simil = dot(light_dir, normalize(rd));
 
-    return cos_simil > 0 ? cos_simil * cos_simil : 0;
+    return cos_simil > 0 ? pow(cos_simil, 2): 0;
 }
 
 
@@ -1231,7 +1235,7 @@ float3 get_incident_L(float3 rp, float3 rd, float3 c_low, float3 c_high, int nBo
         }
         #else
         t_event = delta_tracking_single_layers(rp, rd, 0.0, t.y, rho_max_inv, rng, current_layer, hit_surface);
-        if (t_event == 0) return float3(1,1,5);
+        if (t_event == 0) return float3(150,30,30);
         #endif
 
         // If the ray gets out of AABB, return color
@@ -1251,7 +1255,7 @@ float3 get_incident_L(float3 rp, float3 rd, float3 c_low, float3 c_high, int nBo
             // else return L + throughput_rgb * get_sky_L(rd);
         }
 
-        // return float3(1,0,0);
+        //return float3(1,0,0);
 
         // Move to the next intersection
         rp += t_event * rd;
@@ -1349,15 +1353,15 @@ float3 get_incident_L(float3 rp, float3 rd, float3 c_low, float3 c_high, int nBo
                 //if (intersect_plane(float3(0, -100, -100), float3(0, 100, 100), rp, rd)) return L + throughput_rgb * float3(1,1,1) * 3.0;
 
                 float t_light = 0;
-                float3 light_center = float3(2.0 * grid_x, grid_y/2.0, grid_z/2.0);
-                float light_radius = 200;
+                float3 light_center = float3(-4.0 * grid_x, grid_y/2.0, grid_z/2.0);
+                float light_radius = 600;
 
                 if (intersect_sphere_light(rp, rd, light_center, light_radius, t_light)) {
                     bool hit_surface_shadow_ray = false;
                     delta_tracking_out_volume(rp, rd, 0.0, t.y, rho_max_inv, rng, hit_surface_shadow_ray);
 
                     if (!hit_surface_shadow_ray) {
-                        int light_exposure = 5;
+                        int light_exposure = 4;
                         return L + throughput_rgb * float3(1,1,1) * pow(2, light_exposure);
                     }
                 }
@@ -1367,7 +1371,7 @@ float3 get_incident_L(float3 rp, float3 rd, float3 c_low, float3 c_high, int nBo
                 delta_tracking_out_volume(rp, rd, 0.0, t.y, rho_max_inv, rng, hit_surface_shadow_ray);
 
                 if (!hit_surface_shadow_ray) {
-                    return L + throughput_rgb * float3(1,1,1) * calc_fake_key_light(rd) * pow(2, 3);
+                    return L + throughput_rgb * float3(1,1,1) * max(calc_fake_key_light(rd), 0.03)* 2; //pow(2, 2);
                 }
             }
         }
@@ -1416,7 +1420,7 @@ void main(uint3 threadIDInGroup : SV_GroupThreadID, uint3 groupID : SV_GroupID,
     ry /= aspect_ratio;
 
     // Initialize ray origin and direction
-    const float screen_distance = 4.5;
+    const float screen_distance = 4.5; // 4.5
     const float cam_offset_ratio = 0.45;
     float3 camera_pos = float3(camera_x, camera_y, camera_z);
     float3 camZ = normalize(-camera_pos);
@@ -1430,6 +1434,18 @@ void main(uint3 threadIDInGroup : SV_GroupThreadID, uint3 groupID : SV_GroupID,
         + screen_distance * camZ;
     float3 rp = camera_pos;
     float3 rd = normalize(screen_pos - rp);
+
+    if (dof_on) {
+        float focal_length = focus_dist;
+        float3 focal_point = camera_pos + focal_length * rd;
+        float lens_radius = 1.0 / aperture; // aperture
+        float2 random_disk = sample_disk(rng);
+        float2 random_lens = lens_radius * random_disk;
+        float3 offset = camX * random_lens.x + camY * random_lens.y;
+        rd = normalize(focal_point - (camera_pos + offset));
+        rp = camera_pos + offset;
+    }
+
 
     // Get intersection of the ray with the volume AABB
     float3 path_L = float3(0.0, 0.0, 0.0);
@@ -1479,15 +1495,7 @@ void main(uint3 threadIDInGroup : SV_GroupThreadID, uint3 groupID : SV_GroupID,
             }
         } else {
         // If there's significant scattering, we need the full path-traced solution
-            float lens_radius = aperture / 2.0;
-            float2 random_disk = sample_disk(rng);
-            float2 random_lens = lens_radius * random_disk;
-
-            // I have no idea but offsetting Y and X does the job
-            float3 offset = camY * random_lens.x + camX * random_lens.y;
-
-            rp = rp + offset * focus_dist;
-            rd = normalize(rd - offset / focus_dist);
+            rd = normalize(rd);
             path_L = get_incident_L(rp, rd, float3(0.0, 0.0, 0.0), float3(grid_x, grid_y, grid_z), n_bounces + 1, rng);
         }
     } else {
