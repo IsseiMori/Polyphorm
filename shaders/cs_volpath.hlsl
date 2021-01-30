@@ -97,7 +97,7 @@ cbuffer ConfigBuffer : register(b4)
     float sigma1_a_g;
     float sigma1_a_b;
     float slime_ior;
-    float aperture;
+    int aperture;
 
     //bool dof_on;
     bool halo_on;     
@@ -107,12 +107,12 @@ cbuffer ConfigBuffer : register(b4)
 
     int shininess;
     bool dof_on;
+    int lighting_option;
     float sigma_t_rgb;
-    float albedo_r;
 
+    float albedo_r;
     float albedo_g;
     float albedo_b;
-    int tmp2;
     int tmp3;
 };
 
@@ -1181,8 +1181,7 @@ float3 perturb_vector(float3 rd, float degree, inout RNG rng) {
     return perturbed;
 }
 
-float3 calc_fake_key_light(float3 rd) {
-    float3 light_dir = float3(-1,0,0);
+float3 calc_fake_key_light(float3 rd, float3 light_dir) {
 
     light_dir = normalize(light_dir);
 
@@ -1356,6 +1355,9 @@ float3 get_incident_L(float3 rp, float3 rd, float3 c_low, float3 c_high, int nBo
                 float3 light_center = float3(-4.0 * grid_x, grid_y/2.0, grid_z/2.0);
                 float light_radius = 600;
 
+                if (lighting_option == 1) light_center = float3(-4.0 * grid_x, grid_y/2.0, grid_z/2.0);
+                if (lighting_option == 2) light_center = float3(4.0 * grid_x, grid_y/2.0, grid_z/2.0);
+
                 if (intersect_sphere_light(rp, rd, light_center, light_radius, t_light)) {
                     bool hit_surface_shadow_ray = false;
                     delta_tracking_out_volume(rp, rd, 0.0, t.y, rho_max_inv, rng, hit_surface_shadow_ray);
@@ -1371,7 +1373,10 @@ float3 get_incident_L(float3 rp, float3 rd, float3 c_low, float3 c_high, int nBo
                 delta_tracking_out_volume(rp, rd, 0.0, t.y, rho_max_inv, rng, hit_surface_shadow_ray);
 
                 if (!hit_surface_shadow_ray) {
-                    return L + throughput_rgb * float3(1,1,1) * max(calc_fake_key_light(rd), 0.03)* 2; //pow(2, 2);
+                    float3 light_dir = float3(-1,0,0);
+                    if (lighting_option == 1) light_dir = float3(-1,0,0);
+                    if (lighting_option == 2) light_dir = float3(1,0,0);
+                    return L + throughput_rgb * float3(1,1,1) * max(calc_fake_key_light(rd, light_dir), 0.03)* pow(2, 2); //pow(2, 2);
                 }
             }
         }

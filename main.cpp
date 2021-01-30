@@ -231,22 +231,21 @@ struct RenderingConfig {
     float sigma1_a_g;
     float sigma1_a_b;
     float slime_ior;
-    float aperture;
+    int aperture;
 
     bool halo_on;
-    //bool dof_on;
     float focus_dist;
     float light_pos;
-
     float sphere_pos;
+    
     int shininess;
     bool dof_on;
+    int lighting_option;
     float sigma_t_rgb;
 
     float albedo_r;
     float albedo_g;
     float albedo_b;
-    int tmp2;
     int tmp3;
 
     // add new variables before albedos. Some bug.
@@ -719,12 +718,14 @@ int main(int argc, char **argv)
     rendering_config.focus_dist = 5; // close 2.0 center-ish
     rendering_config.halo_on = false; // close 2.0 center-ish
     //rendering_config.dof_on = true;
+    rendering_config.lighting_option = 1;
 
     // Compute sigma_a and sigma_s for each of RGB
     rendering_config.sigma_t_rgb = 0.7;
-    rendering_config.albedo_r = 0.99;   // 0.92, 0.85 0.98
-    rendering_config.albedo_g = 0.93;   // 0.88, 0.75 0.90
-    rendering_config.albedo_b = 0.00;   // 0.05, 0.24
+    //rendering_config.lighting_option = 1;
+    rendering_config.albedo_r = 0.98;   // 0.92, 0.85 0.98 best
+    rendering_config.albedo_g = 0.90;   // 0.88, 0.75 0.90 best
+    rendering_config.albedo_b = 0.00;   // 0.05, 0.24, 0.00 best
     rendering_config.dof_on = true;
 
 
@@ -806,7 +807,7 @@ int main(int argc, char **argv)
     VisualizationMode vis_mode = VisualizationMode::VM_PATH_TRACING;
 
     bool smooth_trail = true;
-    int batch_rendering_number = 1;
+    int batch_rendering_number = 0;
 
     // Update simulation config
     graphics::update_constant_buffer(&config_buffer, &simulation_config);
@@ -1396,49 +1397,50 @@ int main(int argc, char **argv)
             ui::end();
         }
 
-        // // Batch Rendering
-        // if (batch_rendering_number == 1 && rendering_config.pt_iteration == 2000) {
+        int max_batch_num = 30;
+        if (batch_rendering_number > max_batch_num) is_running = false; 
 
-        //     uint32_t frame_number = graphics::capture_current_frame();
-        //     std::stringstream stream;
-        //     stream << "capture\\frame" << frame_number;
-        //     graphics::save_texture2D_HDR(&display_tex, stream.str());
-        //     make_screenshot = false;
+        // Batch Rendering
+        if (batch_rendering_number == 0 || rendering_config.pt_iteration == 10001) {
+            if (batch_rendering_number == 0) batch_rendering_number = 1;
+            // azimuth, polar, radius, aperture, focus_dist, lighting_option (1 back 2 front)
+            float params[15][5] = { {2.694000, 2.158794, 6.400001, 14, 6.113744},
+                                    {-0.006000, 1.258796, 5.400000, 14, 4.881516},
+                                    {-0.084000, 0.013000, 5.400000, 14, 4.834123},
+                                    {1.500000, 1.519000, 5.400000, 14, 4.597157},
+                                    {3.156000, 1.606000, 4.700000, 14, 4.312796},
+                                    {1.989000, 1.096001, 5.200000, 14, 4.454976},
+                                    {1.989000, 1.096001, 5.200000, 14, 5.118484},
+                                    {1.344000, 1.087000, 2.800000, 35, 2.037915},
+                                    {1.919999, 1.183000, 2.600001, 35, 1.848341},
+                                    {1.919999, 1.183000, 2.600001, 35, 2.085308},
+                                    {6.311999, 1.585000, 1.400001, 35, 1.090047},
+                                    {7.772997, 1.801000, 1.810000, 60, 1.1},
+                                    {0.180000, 1.240796, 5.500000, 14, 5.000000},
+                                    {1.160999, 1.093000, 6.300000, 14, 5.687204},
+                                    {1.434000, 1.444000, 2.500001, 40, 1.611374}}; 
 
-        //     rendering_config.dof_on = false;
-        //     reset_pt = true;
+            azimuth = params[(batch_rendering_number-1)/2][0];
+            polar = params[(batch_rendering_number-1)/2][1];
+            radius = params[(batch_rendering_number-1)/2][2];
+            rendering_config.aperture = int(params[(batch_rendering_number-1)/2][3]);
+            rendering_config.focus_dist = params[(batch_rendering_number-1)/2][4];
+            if (batch_rendering_number % 2 == 0) rendering_config.lighting_option = 1;
+            else rendering_config.lighting_option = 2;
+            reset_pt = true;
+        }
 
-        //     batch_rendering_number += 1;
-        // }
-        // if (batch_rendering_number == 2 && rendering_config.pt_iteration == 2000) {
-
-        //     uint32_t frame_number = graphics::capture_current_frame();
-        //     std::stringstream stream;
-        //     stream << "capture\\frame" << frame_number;
-        //     graphics::save_texture2D_HDR(&display_tex, stream.str());
-        //     make_screenshot = false;
-
-        //     rendering_config.dof_on = true;
-        //     rendering_config.halo_on = true;
-        //     reset_pt = true;
-
-        //     batch_rendering_number += 1;
-        // }
-        // if (batch_rendering_number == 3 && rendering_config.pt_iteration == 10000) {
-
-        //     uint32_t frame_number = graphics::capture_current_frame();
-        //     std::stringstream stream;
-        //     stream << "capture\\frame" << frame_number;
-        //     graphics::save_texture2D_HDR(&display_tex, stream.str());
-        //     make_screenshot = false;
-        // }
+        if (rendering_config.pt_iteration == 10000) {
+            make_screenshot = true;
+            batch_rendering_number += 1;
+        }
         
 
         // Frame capturing
         if (is_running && make_screenshot) {
-            printf("%f ", rendering_config.camera_x);
-            printf("%f ", rendering_config.camera_y);
-            printf("%f ", rendering_config.camera_z);
+            printf("%d, %f %f %f %f, %f, %f, %d, %f, %d\n", batch_rendering_number, rendering_config.camera_x, rendering_config.camera_y, 
+                                                            rendering_config.camera_z, azimuth, polar, radius, rendering_config.aperture, 
+                                                            rendering_config.focus_dist, rendering_config.lighting_option);
 
             uint32_t frame_number = graphics::capture_current_frame();
             std::stringstream stream;
@@ -1447,7 +1449,7 @@ int main(int argc, char **argv)
             make_screenshot = false;
         }
         if (is_running && capture_screen) {
-            graphics::capture_current_frame();
+            //graphics::capture_current_frame();
         }
 
         // // Frame capturing
@@ -1610,9 +1612,9 @@ int main(int argc, char **argv)
                 rendering_config.light_pos = light_pos;
 
                 // Shininess Term
-                float shininess = rendering_config.shininess;
-                reset_pt |= ui::add_slider(&panel, "shininess", &shininess, 1.0, 2000.0);
-                rendering_config.shininess = math::floor(shininess);
+                float aperture = rendering_config.aperture;
+                reset_pt |= ui::add_slider(&panel, "aperture", &aperture, 0.0, 100.0);
+                rendering_config.aperture = math::floor(aperture);
 
                 // focus distance
                 float focus_dist = rendering_config.focus_dist;
@@ -1623,6 +1625,11 @@ int main(int argc, char **argv)
                 bool dof_on = rendering_config.dof_on;
                 reset_pt |= ui::add_toggle(&panel, "DoF ON", &dof_on);
                 rendering_config.dof_on = dof_on;
+
+                // focus distance
+                float lighting_option = rendering_config.lighting_option;
+                reset_pt |= ui::add_slider(&panel, "lighting_option", &lighting_option, 1.0, 3.0);
+                rendering_config.lighting_option = math::floor(lighting_option);
 
                 float expo = log(rendering_config.exposure) / log(10.0);
                 if (bool(rendering_config.compressive_accumulation))
